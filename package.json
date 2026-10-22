@@ -1,0 +1,24 @@
+{
+  "name": "campo-de-tiro",
+  "version": "1.0.0",
+  "description": "Campo de tiro con arco, armas cuerpo a cuerpo y PvP online (teclado/raton y VR con WebXR)",
+  "scripts": {
+    "start": "node server.mjs",
+    "start:https": "node server.mjs --https",
+    "test": "node server/sim.test.mjs && node server/bots.test.mjs",
+    "test:sim": "node server/sim.test.mjs",
+    "test:net": "node server/bots.test.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "three": "^0.170.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "selfsigned": "^5.5.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
+}

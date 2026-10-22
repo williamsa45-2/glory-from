@@ -1,0 +1,27 @@
+# Juego + Caddy (HTTPS automático con Let's Encrypt). Desde la raíz del proyecto:
+#   DOMAIN=juego.midominio.com docker compose -f deploy/docker-compose.yml up -d --build
+# El dominio debe apuntar a la IP del VPS y los puertos 80 y 443 estar abiertos.
+services:
+  game:
+    build: ..
+    restart: unless-stopped
+    environment:
+      MAX_PLAYERS: "12"
+      MAX_PER_IP: "4"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [game]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?define DOMAIN=tu.dominio.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  caddy_data:
+  caddy_config:

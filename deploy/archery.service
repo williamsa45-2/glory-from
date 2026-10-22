@@ -1,0 +1,22 @@
+# /etc/systemd/system/archery.service   (sudo systemctl enable --now archery)
+[Unit]
+Description=Campo de tiro con arco + PvP
+After=network.target
+
+[Service]
+Type=simple
+User=archery
+WorkingDirectory=/opt/archery
+Environment=NODE_ENV=production PORT=3000 HOST=127.0.0.1 TRUST_PROXY=1 MAX_PLAYERS=12
+ExecStart=/usr/bin/node server.mjs
+Restart=always
+RestartSec=2
+# endurecimiento
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/opt/archery
+
+[Install]
+WantedBy=multi-user.target

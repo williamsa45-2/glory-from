@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campo de Tiro con Arco</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23f5f5f5'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%232a8fd6'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23d83a30'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23f6cf2e'/%3E%3C/svg%3E">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1a12; font-family: system-ui, "Segoe UI", sans-serif; }
+    canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    #hud { pointer-events: none; }
+    .overlay {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: auto;
+      background: rgba(8, 20, 12, 0.78); color: #f3e9c6; z-index: 5;
+    }
+    .overlay[hidden], [hidden] { display: none !important; }
+    .card {
+      width: min(640px, 94vw); margin: 16px; padding: 26px 30px; border-radius: 16px;
+      background: #14281b; border: 1px solid #3d5b43; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    h1 { margin: 0 0 4px; font-size: 28px; }
+    .sub { margin: 0 0 18px; color: #9fc9a2; }
+    h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #9fc9a2; margin: 20px 0 8px; }
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mode {
+      border: 0; border-radius: 12px; padding: 16px 14px; text-align: left; cursor: pointer; color: #1b1405;
+      font: 700 18px system-ui, sans-serif;
+    }
+    .mode small { display: block; font-weight: 500; font-size: 13px; margin-top: 4px; opacity: .8; }
+    #btn-training { background: #f0c040; }
+    #btn-pvp { background: #e0675a; }
+    .mode:disabled { opacity: .55; cursor: wait; }
+    .grid { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: center; font-size: 15px; }
+    select, input[type=text] {
+      background: #0e1d14; color: #f3e9c6; border: 1px solid #3d5b43; border-radius: 8px; padding: 8px 10px; font: inherit; width: 100%; box-sizing: border-box;
+    }
+    label.check { display: flex; gap: 8px; align-items: center; }
+    .rule { color: #8aa98d; font-size: 12.5px; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    td { padding: 2px 0; vertical-align: top; }
+    td:first-child { width: 40%; color: #ffe08a; font-weight: 600; padding-right: 10px; }
+    .actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+    button.btn { padding: 11px 18px; font: 600 16px system-ui, sans-serif; border: 0; border-radius: 10px; cursor: pointer; background: #f0c040; color: #1b1405; }
+    button.btn.alt { background: #2f4a37; color: #f3e9c6; }
+    .err { color: #ff8a80; min-height: 1.2em; margin: 10px 0 0; }
+    .note { margin-top: 10px; font-size: 13px; color: #8aa98d; }
+    #vr-slot { position: fixed; right: 16px; bottom: 16px; z-index: 20; }
+    #vr-slot button {
+      position: static !important; width: auto !important; left: auto !important; bottom: auto !important;
+      padding: 12px 20px !important; font: 600 16px system-ui, sans-serif !important;
+      border-radius: 10px !important; cursor: pointer; border: 0 !important; background: #3a7bd5 !important; color: #fff !important; opacity: 1 !important;
+    }
+    details { margin-top: 14px; }
+    summary { cursor: pointer; color: #9fc9a2; font-weight: 600; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+    #pvp-panel { margin-top: 16px; padding: 16px; border-radius: 12px; background: #10231a; border: 1px solid #3d5b43; }
+    #pvp-panel h2:first-child { margin-top: 0; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row input[type=text] { flex: 1; }
+    #room-code { text-transform: uppercase; letter-spacing: .25em; font-weight: 700; }
+    button.btn.small { padding: 8px 12px; font-size: 14px; }
+    #room-list { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+    #room-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #0e1d14; font-size: 14px; }
+    #room-list li span b { color: #ffe08a; letter-spacing: .12em; }
+    #room-list .empty { color: #8aa98d; background: none; padding: 4px 0; }
+    .invite { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: #0e1d14; border: 1px dashed #5d8a63; }
+    .invite .code { font: 800 26px system-ui, sans-serif; letter-spacing: .3em; color: #ffe08a; }
+    .invite input[type=text] { font-size: 13px; }
+    @media (max-width: 640px) { .two, .modes { grid-template-columns: 1fr; } }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <canvas id="hud"></canvas>
+  <div id="vr-slot" hidden></div>
+
+  <!-- MENÚ PRINCIPAL -->
+  <div id="menu" class="overlay">
+    <div class="card">
+      <h1>Campo de Tiro con Arco</h1>
+      <p class="sub">Arco, ballesta, honda, espada, hacha y lanza · teclado y ratón o gafas VR</p>
+
+      <div class="modes">
+        <button id="btn-training" class="mode">Entrenamiento<small>Campo de tiro, munición infinita, muñecos y armero con todas las armas</small></button>
+        <button id="btn-pvp" class="mode">PvP online<small>Crea una sala e invita a tus amigos, o únete con un código</small></button>
+      </div>
+      <div id="menu-status" class="note"></div>
+      <div id="menu-error" class="err"></div>
+
+      <!-- SALAS PvP: crear una (y compartir el código) o unirse a otra -->
+      <div id="pvp-panel" hidden>
+        <div class="two">
+          <div>
+            <h2>Crear sala</h2>
+            <div class="grid" style="grid-template-columns: 110px 1fr">
+              <label for="room-name">Nombre</label>
+              <input type="text" id="room-name" maxlength="24" placeholder="Sala de …">
+              <label for="room-kills">Bajas para ganar</label>
+              <select id="room-kills"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="25">25</option><option value="50">50</option></select>
+              <label for="room-max">Jugadores</label>
+              <select id="room-max"><option value="2">2 (duelo)</option><option value="4">4</option><option value="6">6</option><option value="8" selected>8</option><option value="12">12</option></select>
+              <label for="room-public">Visible</label>
+              <label class="check"><input type="checkbox" id="room-public" checked> Mostrar en la lista</label>
+            </div>
+            <div class="actions"><button id="btn-create" class="btn">Crear sala y entrar</button></div>
+          </div>
+          <div>
+            <h2>Unirse a una sala</h2>
+            <div class="row">
+              <input type="text" id="room-code" maxlength="8" placeholder="CÓDIGO" autocomplete="off">
+              <button id="btn-join" class="btn small">Unirse</button>
+            </div>
+            <h2>Salas abiertas <button id="btn-refresh" class="btn alt small" style="margin-left:6px;padding:3px 9px">↻</button></h2>
+            <ul id="room-list"><li class="empty">Cargando…</li></ul>
+          </div>
+        </div>
+        <p class="note">Tu amigo debe abrir el enlace de invitación (o esta página) desde un equipo que llegue a este servidor: la misma red Wi-Fi, o un servidor con dirección pública.</p>
+      </div>
+
+      <h2>Equipo para PvP</h2>
+      <div class="grid">
+        <label for="lo-melee">Cuerpo a cuerpo</label>
+        <select id="lo-melee"><option value="sword">Espada</option><option value="axe">Hacha (también se lanza)</option><option value="none">Ninguna</option></select>
+        <label for="lo-spear">Lanza</label>
+        <label class="check"><input type="checkbox" id="lo-spear"> Llevar lanza (cuerpo a cuerpo o lanzada)</label>
+        <label for="lo-ranged">Distancia</label>
+        <select id="lo-ranged"><option value="bow">Arco (12 flechas)</option><option value="crossbow">Ballesta (6 virotes, más alcance)</option><option value="sling">Honda (1 piedra + las del suelo)</option><option value="none">Ninguna</option></select>
+        <label for="name">Nombre</label>
+        <input type="text" id="name" maxlength="16" placeholder="Tu nombre">
+        <label for="server">Servidor</label>
+        <input type="text" id="server" placeholder="ws://…">
+        <label for="hand">Mano dominante (VR)</label>
+        <select id="hand"><option value="right">Derecha</option><option value="left">Izquierda</option></select>
+      </div>
+      <div class="rule">No se puede llevar espada y hacha a la vez, ni arco, ballesta y honda a la vez. Lo lanzado no desaparece del mundo: se vuelve a recoger.</div>
+
+      <details>
+        <summary>Controles</summary>
+        <div class="two">
+          <div>
+            <h2>Teclado y ratón</h2>
+            <table>
+              <tr><td>Ratón / WASD</td><td>Apuntar / moverte</td></tr>
+              <tr><td>Mayús (+ W) / Espacio</td><td>Correr / saltar (cajas y muros bajos)</td></tr>
+              <tr><td>Clic izq.</td><td>Usar el arma (mantener para tensar, girar o preparar el lanzamiento)</td></tr>
+              <tr><td>Clic der.</td><td>Zoom (armas a distancia)</td></tr>
+              <tr><td>1 · 2 · 3 / Q / rueda</td><td>Cuerpo a cuerpo · lanza · distancia / siguiente</td></tr>
+              <tr><td>F o clic der.</td><td><b>Hacha/lanza: cambiar a modo LANZAR</b> (clic mantenido y soltar) y volver</td></tr>
+              <tr><td>E / X</td><td>Recoger arma / soltarla</td></tr>
+              <tr><td>Tab</td><td>Clasificación (PvP)</td></tr>
+              <tr><td>R · G · T · N</td><td>Entrenamiento: recoger · escala · viento · reiniciar</td></tr>
+            </table>
+          </div>
+          <div>
+            <h2>Gafas VR</h2>
+            <table>
+              <tr><td>Mano dominante</td><td>Arma cuerpo a cuerpo, ballesta u honda (gatillo)</td></tr>
+              <tr><td>Arco</td><td>Mano libre lo sostiene; la otra tensa con el gatillo</td></tr>
+              <tr><td>Golpear</td><td>Mueve el arma con fuerza hacia el rival</td></tr>
+              <tr><td>Lanzar</td><td>Modo lanzar: gatillo y suelta moviendo la mano</td></tr>
+              <tr><td>Agarre</td><td>Recoger arma cercana</td></tr>
+              <tr><td>A·X / <b>B·Y</b></td><td>Siguiente arma / <b>modo LANZAR</b> ⇄ melé (hacha, lanza)</td></tr>
+              <tr><td>Stick izq.</td><td>Mover; a fondo = correr</td></tr>
+              <tr><td>Stick der.</td><td>Girar · adelante = saltar · clic = soltar el arma</td></tr>
+              <tr><td>Panel del mando libre</td><td>Tu inventario y vida</td></tr>
+            </table>
+          </div>
+        </div>
+      </details>
+      <p class="note" id="vr-note"></p>
+    </div>
+  </div>
+
+  <!-- PAUSA -->
+  <div id="pause" class="overlay" hidden>
+    <div class="card">
+      <h1 id="pause-title">Pausa</h1>
+      <p class="sub" id="pause-text"></p>
+      <div id="room-info" class="invite" hidden>
+        <div class="row" style="justify-content:space-between"><span>Sala <b id="room-info-name"></b></span><span class="code" id="room-info-code"></span></div>
+        <select id="room-ip" title="Red por la que se conectará tu amigo" style="margin-top:8px" hidden></select>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="room-link" readonly>
+          <button id="btn-copy" class="btn small">Copiar enlace</button>
+        </div>
+        <p class="note" id="room-info-note" style="margin-bottom:0"></p>
+      </div>
+      <div id="pvp-loadout" hidden>
+        <h2>Equipo (se aplica al reaparecer)</h2>
+        <div class="grid">
+          <label for="p-melee">Cuerpo a cuerpo</label>
+          <select id="p-melee"><option value="sword">Espada</option><option value="axe">Hacha</option><option value="none">Ninguna</option></select>
+          <label for="p-spear">Lanza</label>
+          <label class="check"><input type="checkbox" id="p-spear"> Llevar lanza</label>
+          <label for="p-ranged">Distancia</label>
+          <select id="p-ranged"><option value="bow">Arco</option><option value="crossbow">Ballesta</option><option value="sling">Honda</option><option value="none">Ninguna</option></select>
+        </div>
+      </div>
+      <div id="train-tips" hidden>
+        <h2>Entrenamiento</h2>
+        <p class="rule" style="font-size:14px">El armero está a la derecha de la plataforma: acércate y pulsa <b>E</b> (VR: agarre) para coger un arma. Cada hueco admite un arma (espada/hacha, lanza, arco/ballesta/honda); coger otra reemplaza la anterior. Lo lanzado se queda en el suelo: <b>E</b> para recogerlo o <b>R</b> para recogerlo todo. Prueba el cuerpo a cuerpo con los muñecos de paja.</p>
+      </div>
+      <div class="actions">
+        <button id="play" class="btn">Continuar</button>
+        <button id="btn-menu" class="btn alt">Menú principal</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
