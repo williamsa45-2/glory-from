@@ -92,6 +92,12 @@ sudo cp deploy/archery.service /etc/systemd/system/ && sudo systemctl enable --n
 # nginx: copiar deploy/nginx.conf y `sudo certbot --nginx -d juego.midominio.com`
 ```
 
+### Salas y modos de juego
+El VPS es el servidor: la web y el WebSocket salen del mismo dominio, y los jugadores no necesitan configurar nada (el campo «Servidor» del menú solo sirve para apuntar a otro).
+- **Pública**: aparece en la lista de «Salas abiertas». **Privada**: solo se entra con el código o el enlace de invitación. Siempre existe una sala pública permanente (`PUBLICA`).
+- **Todos contra todos**: gana quien llegue primero a las bajas elegidas.
+- **Por escuadras** (2–4: Rojo, Azul, Verde, Amarillo): sin fuego amigo; gana la escuadra cuyas bajas sumadas lleguen a la meta. Los jugadores entran equilibrados y pueden cambiar de escuadra desde la pausa (Esc), con un tiempo de espera y respetando el tamaño máximo de cada una.
+
 Variables del servidor: `PORT`, `HOST`, `TRUST_PROXY=1` (IP real tras el proxy), `MAX_PLAYERS` (12), `MAX_PER_IP` (4), `ALLOWED_ORIGINS`.
 `/healthz` devuelve el estado (jugadores, uptime). Una sola arena de hasta 12 jugadores; la simulación va a 60 Hz y difunde poses a 20 Hz.
 

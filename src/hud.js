@@ -1,5 +1,6 @@
 import { RING_STYLE } from './scoreboard.js';
 import { drawInventory, drawHealthBar } from './inventoryUi.js';
+import { teamName, teamColor } from '../shared/teams.js';
 
 /** HUD 2D superpuesto (solo modo escritorio). */
 export class DesktopHud {
@@ -152,9 +153,27 @@ export class DesktopHud {
     } else {
       const me = s.players.get(s.myId);
       g.fillStyle = 'rgba(0,0,0,0.45)';
-      g.fillRect(14, 14, 250, 36);
+      g.fillRect(14, 14, 250, s.teams ? 62 : 36);
       g.fillStyle = '#f3e9c6';
-      g.fillText(`Bajas ${me?.k ?? 0}/${s.killLimit}    Muertes ${me?.d ?? 0}`, 26, 38);
+      if (s.teams) {
+        // escuadras: la meta es del equipo; se muestra la suma de cada escuadra y la tuya resaltada
+        let x = 26;
+        g.font = '700 16px sans-serif';
+        // con muchas parejas no caben todas: tu equipo y el rival que va en cabeza
+        const rival = s.teamKills.reduce((best, k, i) => (i !== s.myTeam && k > (s.teamKills[best] ?? -1) ? i : best), s.myTeam === 0 ? 1 : 0);
+        const shown = s.teams > 4 ? [s.myTeam, rival] : [...Array(s.teams).keys()];
+        for (const i of shown) {
+          g.fillStyle = teamColor(i);
+          const label = `${teamName(i)} ${s.teamKills[i] ?? 0}`;
+          g.fillText(i === s.myTeam ? `[${label}]` : label, x, 36);
+          x += g.measureText(label).width + 22;
+        }
+        g.fillStyle = '#f3e9c6';
+        g.font = '14px sans-serif';
+        g.fillText(`Meta ${s.killLimit} bajas · tú ${me?.k ?? 0}/${me?.d ?? 0}`, 26, 62);
+      } else {
+        g.fillText(`Bajas ${me?.k ?? 0}/${s.killLimit}    Muertes ${me?.d ?? 0}`, 26, 38);
+      }
       // registro de bajas
       g.textAlign = 'right';
       g.font = '600 14px sans-serif';
@@ -194,7 +213,7 @@ export class DesktopHud {
         g.fillText(s.killerName ? `Te ha eliminado ${s.killerName}` : 'Has muerto', cx, cy - 10);
         g.font = '600 18px sans-serif';
         g.fillStyle = '#fff';
-        g.fillText('Reapareces en unos segundos · Esc para cambiar de equipo', cx, cy + 28);
+        g.fillText('Reapareces en unos segundos · Esc para cambiar de armas', cx, cy + 28);
       }
       if (s.banner) {
         g.textAlign = 'center';
@@ -231,7 +250,10 @@ export class DesktopHud {
   }
 
   drawScores(g, s) {
-    const list = s.scoreList;
+    // por escuadras: agrupados por equipo, el que va ganando arriba
+    const list = s.teams
+      ? s.scoreList.sort((a, b) => (s.teamKills[b.team] ?? 0) - (s.teamKills[a.team] ?? 0) || a.team - b.team || b.k - a.k || a.d - b.d)
+      : s.scoreList;
     const w = 420;
     const x = (this.w - w) / 2;
     const y = this.h * 0.2;
@@ -251,7 +273,14 @@ export class DesktopHud {
       g.textAlign = 'left';
       g.font = p.id === s.myId ? '800 17px sans-serif' : '600 17px sans-serif';
       g.fillStyle = p.id === s.myId ? '#ffe08a' : '#f3e9c6';
-      g.fillText(`${i + 1}. ${p.name}`, x + 18, yy);
+      if (s.teams) {
+        g.fillStyle = teamColor(p.team);
+        g.fillRect(x + 18, yy - 12, 6, 15);
+        g.fillStyle = p.id === s.myId ? '#ffe08a' : '#f3e9c6';
+        g.fillText(p.name, x + 32, yy);
+      } else {
+        g.fillText(`${i + 1}. ${p.name}`, x + 18, yy);
+      }
       g.textAlign = 'right';
       g.fillText(String(p.k), x + w - 90, yy);
       g.fillText(String(p.d), x + w - 18, yy);

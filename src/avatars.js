@@ -3,6 +3,7 @@ import { PLAYER_HP } from '../shared/weapons.js';
 import { BRACE, MAX_DRAW } from './physics.js';
 import { createWeaponModel } from './weaponModels.js';
 import { textSprite } from './effects.js';
+import { teamColor } from '../shared/teams.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _a = new THREE.Vector3();
@@ -27,12 +28,14 @@ const limbGeo = new THREE.CylinderGeometry(0.035, 0.03, 1, 6);
 
 /** Jugador remoto: cabeza, torso, brazos hasta las manos reales (VR) y el arma que lleva. */
 class Avatar {
-  constructor(id, name) {
+  constructor(id, name, team = null) {
     this.id = id;
     this.name = name;
+    this.team = team;
     this.group = new THREE.Group();
-    this.color = hueColor(id);
+    this.color = team == null ? hueColor(id) : new THREE.Color(teamColor(team));
     const cloth = new THREE.MeshStandardMaterial({ color: this.color, roughness: 0.85 });
+    this.cloth = cloth;
 
     this.head = new THREE.Group();
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), skinMat);
@@ -89,7 +92,7 @@ class Avatar {
     g.lineWidth = 6;
     g.strokeStyle = 'rgba(0,0,0,0.85)';
     g.strokeText(this.name, 128, 32);
-    g.fillStyle = '#fff';
+    g.fillStyle = this.team == null ? '#fff' : teamColor(this.team);
     g.fillText(this.name, 128, 32);
     g.fillStyle = 'rgba(0,0,0,0.6)';
     g.fillRect(28, 50, 200, 14);
@@ -100,6 +103,15 @@ class Avatar {
     this.nameTag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
     this.nameTag.scale.set(0.8, 0.25, 1);
     this.group.add(this.nameTag);
+  }
+
+  setTeam(team) {
+    if (team === this.team) return;
+    this.team = team;
+    this.color = team == null ? hueColor(this.id) : new THREE.Color(teamColor(team));
+    this.cloth.color.copy(this.color);
+    this.lastHp = -1; // redibuja la etiqueta con el color de la escuadra
+    this.updateTag(this.lastHpValue ?? PLAYER_HP);
   }
 
   setWeapon(id) {
@@ -159,9 +171,9 @@ export class RemotePlayers {
     this.avatars = new Map();
   }
 
-  add(id, name) {
+  add(id, name, team = null) {
     if (this.avatars.has(id)) return this.avatars.get(id);
-    const a = new Avatar(id, name);
+    const a = new Avatar(id, name, team);
     a.group.visible = false; // hasta recibir la primera pose
     this.scene.add(a.group);
     this.avatars.set(id, a);
@@ -175,6 +187,10 @@ export class RemotePlayers {
       a.lastHp = -1;
       a.updateTag(a.lastHpValue ?? PLAYER_HP);
     }
+  }
+
+  setTeam(id, team) {
+    this.avatars.get(id)?.setTeam(team);
   }
 
   remove(id) {

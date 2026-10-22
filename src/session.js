@@ -29,7 +29,9 @@ export class GameSession {
     this.hp = PLAYER_HP;
     this.alive = false;
     this.killLimit = 15;
-    this.players = new Map(); // id -> {name, k, d}
+    this.teams = 0; // nº de escuadras de la sala (0 = todos contra todos)
+    this.teamKills = [];
+    this.players = new Map(); // id -> {name, k, d, team}
     this.feed = [];
     this.banner = null;
     this.hitMarker = 0;
@@ -75,6 +77,14 @@ export class GameSession {
     this.send({ t: 'loadout', loadout });
   }
 
+  setTeam(team) {
+    this.send({ t: 'team', team });
+  }
+
+  get myTeam() {
+    return this.players.get(this.myId)?.team ?? null;
+  }
+
   // ----------------------------------------------------------------------- eventos
   handle(m) {
     switch (m.t) {
@@ -82,10 +92,12 @@ export class GameSession {
         this.myId = m.id;
         this.infinite = m.infinite;
         this.killLimit = m.killLimit;
+        this.teams = m.teams ?? 0;
+        this.teamKills = m.teamKills ?? [];
         this.players.clear();
         for (const p of m.players) {
-          this.players.set(p.id, { name: p.name, k: p.k, d: p.d });
-          if (p.id !== m.id) this.remote.add(p.id, p.name);
+          this.players.set(p.id, { name: p.name, k: p.k, d: p.d, team: p.team ?? null });
+          if (p.id !== m.id) this.remote.add(p.id, p.name, p.team ?? null);
         }
         this.items.clear();
         for (const it of m.items) this.items.add(it);
@@ -102,8 +114,8 @@ export class GameSession {
         break;
       case 'join':
         if (m.id !== this.myId) {
-          this.remote.add(m.id, m.name);
-          this.players.set(m.id, { name: m.name, k: 0, d: 0 });
+          this.remote.add(m.id, m.name, m.team ?? null);
+          this.players.set(m.id, { name: m.name, k: 0, d: 0, team: m.team ?? null });
           this.pushFeed(`${m.name} ha entrado`);
         }
         break;
@@ -116,9 +128,14 @@ export class GameSession {
       }
       case 'scores':
         for (const p of m.list) {
-          this.players.set(p.id, { name: p.name, k: p.k, d: p.d });
+          this.players.set(p.id, { name: p.name, k: p.k, d: p.d, team: p.team ?? null });
           this.remote.rename(p.id, p.name);
+          this.remote.setTeam(p.id, p.team ?? null);
         }
+        this.teamKills = m.tk ?? this.teamKills;
+        break;
+      case 'team':
+        if (m.id === this.myId) this.hooks.onTeam?.(m.team);
         break;
       case 'snap':
         this.remote.applySnapshot(m.p, this.myId);

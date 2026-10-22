@@ -13,6 +13,7 @@ import { DesktopControls } from './desktop.js';
 import { VRControls } from './vr.js';
 import { Sim } from '../shared/sim.js';
 import { DECK, ARENA_MAP, TRAINING_MAP, TARGET_CENTER_Y } from '../shared/maps.js';
+import { teamName, teamColor } from '../shared/teams.js';
 import { WEAPONS, sanitizeLoadout, selectedWeapon, isThrowing } from '../shared/weapons.js';
 import { solveElevation } from '../shared/physics.js';
 import { pushOutOfBoxes, supportHeight } from '../shared/geometry.js';
@@ -20,7 +21,7 @@ import { pushOutOfBoxes, supportHeight } from '../shared/geometry.js';
 const $ = (id) => document.getElementById(id);
 
 // --- Ajustes guardados ---------------------------------------------------------------------
-const defaults = { name: '', server: '', melee: 'sword', spear: false, ranged: 'bow', hand: 'right', roomName: '', roomKills: '15', roomMax: '8', roomPublic: true };
+const defaults = { name: '', server: '', melee: 'sword', spear: false, ranged: 'bow', hand: 'right', roomName: '', roomKills: '15', roomMax: '8', roomVisibility: 'public', roomMode: 'ffa', roomSquads: '2' };
 const settings = { ...defaults };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('archery-settings') ?? '{}'));
@@ -163,6 +164,10 @@ async function launch(selectedMode, { serverUrl, room, create } = {}) {
     onDealt: () => vr?.dealtPulse(),
     onDummyHit: (id) => world.flashDummy?.(id),
     onScore: (m) => onScore(m),
+    onTeam: (team) => {
+      hud.toast(`Ahora estás en la escuadra ${teamName(team)}`);
+      renderTeamPicker();
+    },
   };
   session = new GameSession({ scene, audio, mode, transport, hooks });
   game.session = session;
@@ -277,6 +282,29 @@ function showPause(text) {
   $('pvp-loadout').hidden = mode !== 'pvp';
   $('room-info').hidden = !(mode === 'pvp' && currentRoom);
   $('train-tips').hidden = mode !== 'training';
+  renderTeamPicker();
+}
+
+/** Botones para cambiar de escuadra (solo en salas por escuadras). */
+function renderTeamPicker() {
+  const squads = mode === 'pvp' && session?.teams > 0;
+  $('team-pick').hidden = !squads;
+  if (!squads) return;
+  const mine = session.myTeam;
+  const counts = Array(session.teams).fill(0);
+  for (const p of session.players.values()) if (p.team != null) counts[p.team]++;
+  $('team-buttons').replaceChildren(
+    ...counts.map((n, i) => {
+      const b = document.createElement('button');
+      b.className = 'btn small';
+      b.textContent = `${teamName(i)} (${n})`;
+      b.style.background = teamColor(i);
+      b.style.opacity = i === mine ? '1' : '0.55';
+      b.style.outline = i === mine ? '3px solid #fff' : 'none';
+      b.addEventListener('click', () => session.setTeam(i));
+      return b;
+    })
+  );
 }
 
 function bindSelect(id, key, { checkbox = false, onChange } = {}) {
@@ -292,7 +320,7 @@ function bindSelect(id, key, { checkbox = false, onChange } = {}) {
 const applyLoadout = () => {
   if (session && mode === 'pvp') {
     session.setLoadout(loadout());
-    hud.toast('Equipo cambiado: se aplicará al reaparecer');
+    hud.toast('Armas cambiadas: se aplicarán al reaparecer');
   }
 };
 for (const prefix of ['lo', 'p']) {
@@ -399,7 +427,7 @@ async function showRoom(room) {
   update();
   $('room-info-note').textContent = onlyLocal
     ? 'No se encontró la IP de este PC en la red local: el enlace solo sirve aquí. Comprueba que estás conectado a la red.'
-    : `Pásale el enlace o el código ${room.code} (debe estar en tu misma red Wi-Fi). Gana quien llegue a ${room.killLimit} bajas · máximo ${room.max} jugadores.`;
+    : `Pásale el enlace o el código ${room.code} ${['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? ' (debe estar en tu misma red Wi-Fi)' : ''}. ${room.teams ? `Gana ${room.mode === 'duos' ? 'la pareja' : 'la escuadra'} que sume ${room.killLimit} bajas` : `Gana quien llegue a ${room.killLimit} bajas`} · máximo ${room.max} jugadores.`;
   hud.toast(`Sala ${room.code} · Esc para ver el código y el enlace de invitación`, 6);
 }
 $('btn-copy').addEventListener('click', async () => {
@@ -429,7 +457,7 @@ async function refreshRooms() {
     for (const r of rooms) {
       const li = document.createElement('li');
       const info = document.createElement('span');
-      info.textContent = `${r.name} · ${r.players}/${r.max} · ${r.killLimit} bajas · `;
+      info.textContent = `${r.name} · ${r.players}/${r.max} · ${{ squads: `${r.teams} escuadras`, duos: 'dúos' }[r.mode] ?? 'todos vs todos'} · ${r.killLimit} bajas · `;
       const code = document.createElement('b');
       code.textContent = r.code;
       info.append(code);
@@ -458,7 +486,15 @@ $('btn-pvp').addEventListener('click', () => {
 $('btn-refresh').addEventListener('click', refreshRooms);
 bindSelect('room-kills', 'roomKills');
 bindSelect('room-max', 'roomMax');
-bindSelect('room-public', 'roomPublic', { checkbox: true });
+bindSelect('room-public', 'roomVisibility');
+const syncRoomMode = () => {
+  const squads = settings.roomMode === 'squads';
+  $('room-squads').hidden = !squads;
+  $('room-squads-label').hidden = !squads;
+};
+bindSelect('room-mode', 'roomMode', { onChange: syncRoomMode });
+bindSelect('room-squads', 'roomSquads');
+syncRoomMode();
 $('room-name').value = settings.roomName;
 $('room-name').placeholder = `Sala de ${settings.name || 'Arquero'}`;
 $('room-name').addEventListener('input', () => {
@@ -471,7 +507,9 @@ $('btn-create').addEventListener('click', () =>
       name: settings.roomName || `Sala de ${settings.name || 'Arquero'}`,
       killLimit: Number(settings.roomKills),
       maxPlayers: Number(settings.roomMax),
-      public: !!settings.roomPublic,
+      public: settings.roomVisibility !== 'private',
+      mode: settings.roomMode,
+      teams: settings.roomMode === 'squads' ? Number(settings.roomSquads) : 0,
     },
   })
 );
@@ -545,7 +583,7 @@ if (params.get('name')) settings.name = params.get('name');
 if (params.get('sala')) {
   $('pvp-panel').hidden = false;
   $('room-code').value = params.get('sala').toUpperCase().slice(0, 8);
-  $('menu-status').textContent = `Te han invitado a la sala ${$('room-code').value}: elige tu equipo y pulsa «Unirse».`;
+  $('menu-status').textContent = `Te han invitado a la sala ${$('room-code').value}: elige tus armas y pulsa «Unirse».`;
   refreshRooms();
 }
 if (params.get('autostart')) start(params.get('autostart') === 'pvp' ? 'pvp' : 'training', params.get('sala') ? { room: params.get('sala') } : {});

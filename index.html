@@ -102,8 +102,12 @@
               <select id="room-kills"><option value="5">5</option><option value="10">10</option><option value="15" selected>15</option><option value="25">25</option><option value="50">50</option></select>
               <label for="room-max">Jugadores</label>
               <select id="room-max"><option value="2">2 (duelo)</option><option value="4">4</option><option value="6">6</option><option value="8" selected>8</option><option value="12">12</option></select>
-              <label for="room-public">Visible</label>
-              <label class="check"><input type="checkbox" id="room-public" checked> Mostrar en la lista</label>
+              <label for="room-mode">Modo</label>
+              <select id="room-mode"><option value="ffa">Todos contra todos</option><option value="squads">Por escuadras</option><option value="duos">Dúos (parejas)</option></select>
+              <label for="room-squads" id="room-squads-label">Escuadras</label>
+              <select id="room-squads"><option value="2">2 (Rojo · Azul)</option><option value="3">3</option><option value="4">4</option></select>
+              <label for="room-public">Visibilidad</label>
+              <select id="room-public"><option value="public">Pública: sale en la lista</option><option value="private">Privada: solo con el código</option></select>
             </div>
             <div class="actions"><button id="btn-create" class="btn">Crear sala y entrar</button></div>
           </div>
@@ -117,10 +121,10 @@
             <ul id="room-list"><li class="empty">Cargando…</li></ul>
           </div>
         </div>
-        <p class="note">Tu amigo debe abrir el enlace de invitación (o esta página) desde un equipo que llegue a este servidor: la misma red Wi-Fi, o un servidor con dirección pública.</p>
+        <p class="note">Tu amigo debe abrir el enlace de invitación (o esta página) desde un equipo que llegue a este servidor: la misma red Wi-Fi, o tu VPS con dirección pública (campo «Servidor»).</p>
       </div>
 
-      <h2>Equipo para PvP</h2>
+      <h2>Armas para PvP</h2>
       <div class="grid">
         <label for="lo-melee">Cuerpo a cuerpo</label>
         <select id="lo-melee"><option value="sword">Espada</option><option value="axe">Hacha (también se lanza)</option><option value="none">Ninguna</option></select>
@@ -188,8 +192,12 @@
         </div>
         <p class="note" id="room-info-note" style="margin-bottom:0"></p>
       </div>
+      <div id="team-pick" hidden>
+        <h2>Escuadra</h2>
+        <div class="row" id="team-buttons"></div>
+      </div>
       <div id="pvp-loadout" hidden>
-        <h2>Equipo (se aplica al reaparecer)</h2>
+        <h2>Armas (se aplican al reaparecer)</h2>
         <div class="grid">
           <label for="p-melee">Cuerpo a cuerpo</label>
           <select id="p-melee"><option value="sword">Espada</option><option value="axe">Hacha</option><option value="none">Ninguna</option></select>

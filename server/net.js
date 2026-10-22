@@ -3,6 +3,7 @@
 import { WebSocketServer } from 'ws';
 import { Sim } from '../shared/sim.js';
 import { MAPS } from '../shared/maps.js';
+import { MAX_TEAMS, MAX_SQUADS } from '../shared/teams.js';
 
 export const PROTOCOL = 2;
 const TICK_MS = 1000 / 60;
@@ -19,11 +20,28 @@ export function sanitizeRoomSettings(s = {}, maxPlayers = 12) {
   const name = typeof s?.name === 'string' ? s.name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 24) : '';
   const max = Math.round(Number(s?.maxPlayers));
   const kills = Math.round(Number(s?.killLimit));
+  const squads = Math.round(Number(s?.teams));
+  let players = Number.isFinite(max) ? Math.min(maxPlayers, Math.max(2, max)) : maxPlayers;
+  // ffa = todos contra todos · squads = 2–4 escuadras · duos = parejas fijas (jugadores pares, ≥ 4)
+  const mode = s?.mode === 'duos' ? 'duos' : s?.mode === 'squads' || squads >= 2 ? 'squads' : 'ffa';
+  let teams = 0;
+  let maxPerTeam = Infinity;
+  if (mode === 'duos') {
+    players = Math.min(MAX_TEAMS * 2, Math.max(4, players - (players % 2)));
+    teams = players / 2;
+    maxPerTeam = 2;
+  } else if (mode === 'squads') {
+    teams = Math.min(Math.max(2, squads || 2), MAX_SQUADS, players);
+    maxPerTeam = Math.ceil(players / teams);
+  }
   return {
     name: name || 'Sala',
-    maxPlayers: Number.isFinite(max) ? Math.min(maxPlayers, Math.max(2, max)) : maxPlayers,
+    maxPlayers: players,
     killLimit: KILL_LIMITS.includes(kills) ? kills : 15,
     public: s?.public !== false,
+    mode: teams ? mode : 'ffa',
+    teams,
+    maxPerTeam,
   };
 }
 
@@ -70,6 +88,8 @@ export function attachGameServer(httpServer, { maxPlayers = 12, maxPerIp = 4, tr
         map: MAPS.arena,
         mode: 'pvp',
         killLimit: settings.killLimit,
+        teams: settings.teams,
+        maxPerTeam: settings.maxPerTeam,
         emit(msg, to) {
           const text = JSON.stringify(msg);
           if (to === undefined) for (const ws of sockets.values()) send(ws, text);
@@ -85,10 +105,10 @@ export function attachGameServer(httpServer, { maxPlayers = 12, maxPerIp = 4, tr
   }
 
   const publicInfo = (r) => ({
-    code: r.code, name: r.settings.name, players: r.sockets.size, max: r.settings.maxPlayers, killLimit: r.settings.killLimit,
+    code: r.code, name: r.settings.name, players: r.sockets.size, max: r.settings.maxPlayers, killLimit: r.settings.killLimit, teams: r.settings.teams, mode: r.settings.mode,
   });
 
-  createRoom(DEFAULT_ROOM, { name: 'Arena pública', maxPlayers, killLimit: 15, public: true }, { permanent: true });
+  createRoom(DEFAULT_ROOM, { name: 'Arena pública', maxPlayers, killLimit: 15, public: true, teams: 0, mode: 'ffa', maxPerTeam: Infinity }, { permanent: true });
 
   let last = performance.now();
   const loop = setInterval(() => {
@@ -155,7 +175,7 @@ export function attachGameServer(httpServer, { maxPlayers = 12, maxPerIp = 4, tr
         if (msg.create) {
           if (rooms.size >= MAX_ROOMS) return refuse('too_many_rooms', 4005, 'too many rooms');
           room = createRoom(newCode(), sanitizeRoomSettings(msg.create, maxPlayers));
-          log(`sala ${room.code} creada: «${room.settings.name}» (${room.settings.maxPlayers} jug., ${room.settings.killLimit} bajas)`);
+          log(`sala ${room.code} creada: «${room.settings.name}» (${room.settings.maxPlayers} jug., ${room.settings.killLimit} bajas, ${{ ffa: 'todos contra todos', squads: room.settings.teams + ' escuadras', duos: 'dúos' }[room.settings.mode]})`);
         } else {
           room = rooms.get(normCode(msg.room) || DEFAULT_ROOM);
           if (!room) return refuse('no_room', 4004, 'no room');

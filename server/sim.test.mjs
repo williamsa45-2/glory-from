@@ -289,4 +289,70 @@ test('limite de kills termina la partida y reinicia', () => {
   assert.equal(a.kills, 0);
 });
 
+console.log('Escuadras');
+function squads(teams = 2) {
+  const log = [];
+  const sim = new Sim({ map: MAPS.arena, mode: 'pvp', teams, maxPerTeam: 2, killLimit: 3, emit: (m, to) => log.push({ ...m, _to: to }) });
+  return { sim, log, evs: (t) => log.filter((e) => e.t === t) };
+}
+test('los jugadores se reparten equilibrados entre las escuadras', () => {
+  const { sim } = squads(2);
+  for (const id of ['A', 'B', 'C', 'D']) sim.addPlayer(id, { name: id });
+  assert.deepEqual([...sim.players.values()].map((p) => p.team), [0, 1, 0, 1]);
+});
+test('sin fuego amigo: la espada no hiere a un compañero pero sí a un rival', () => {
+  const { sim } = squads(2);
+  const a = sim.addPlayer('A', { name: 'A', loadout: { melee: 'sword' } });
+  const b = sim.addPlayer('B', { name: 'B', loadout: { melee: 'sword' } });
+  const c = sim.addPlayer('C', { name: 'C', loadout: { melee: 'sword' } });
+  assert.equal(a.team, c.team);
+  look(sim, 'A', 2, 1.65, 0);
+  look(sim, 'C', 2, 1.65, -1);
+  look(sim, 'B', 2, 1.65, 30);
+  sim.handle('A', { t: 'select', slot: 'melee' });
+  sim.handle('A', { t: 'melee', o: [2, 1.5, 0], d: [0, 0, -1], v: 1 });
+  assert.equal(c.hp, 100, 'compañero ileso');
+  look(sim, 'B', 2, 1.65, -1);
+  run(sim, 1);
+  sim.handle('A', { t: 'melee', o: [2, 1.5, 0], d: [0, 0, -1], v: 1 });
+  assert.ok(b.hp < 100, 'el rival sí recibe daño');
+});
+test('ganan las bajas sumadas de la escuadra y se anuncia la escuadra', () => {
+  const { sim, evs } = squads(2);
+  for (const id of ['A', 'B', 'C', 'D']) sim.addPlayer(id, { name: id, loadout: { melee: 'sword' } });
+  const [a, b, c, d] = [...sim.players.values()];
+  sim.teamKills[a.team] = 2; // a y c son la misma escuadra
+  sim.damage(b, c, 999, false, 'Espada', new THREE.Vector3());
+  assert.equal(sim.teamKills[0], 3);
+  const end = evs('match_end');
+  assert.equal(end.length, 1);
+  assert.equal(end[0].team, 0);
+  assert.match(end[0].name, /Rojo/);
+  assert.equal(d.kills, 0);
+});
+test('cambiar de escuadra: respeta el tamaño máximo y el tiempo de espera', () => {
+  const { sim, evs } = squads(2);
+  for (const id of ['A', 'B', 'C']) sim.addPlayer(id, { name: id });
+  const [a, b, c] = [...sim.players.values()];
+  assert.deepEqual([a.team, b.team, c.team], [0, 1, 0]);
+  sim.handle('B', { t: 'team', team: 0 }); // la escuadra 0 ya tiene 2 = completa
+  assert.equal(b.team, 1);
+  sim.handle('A', { t: 'team', team: 9 }); // inválida
+  assert.equal(a.team, 0);
+  sim.handle('A', { t: 'team', team: 1 });
+  assert.equal(a.team, 1);
+  assert.equal(evs('team').length, 1);
+  sim.handle('A', { t: 'team', team: 0 }); // demasiado pronto
+  assert.equal(a.team, 1);
+  run(sim, 6);
+  sim.handle('A', { t: 'team', team: 0 });
+  assert.equal(a.team, 0);
+});
+test('todos contra todos: sin equipos y fuego libre', () => {
+  const { sim } = mk('arena', 'pvp');
+  const a = sim.addPlayer('A', { name: 'A' });
+  assert.equal(a.team, null);
+  assert.equal(sim.allies(a, a), false);
+});
+
 console.log(`\n${passed} pruebas OK`);

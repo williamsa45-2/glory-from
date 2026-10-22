@@ -8,6 +8,7 @@ import {
 } from './weapons.js';
 import { stepProjectile, scoreHit, FIXED_DT } from './physics.js';
 import { segAABB, segCapsule, segSphere } from './geometry.js';
+import { teamName } from './teams.js';
 
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const finite3 = (a) => Array.isArray(a) && a.length >= 3 && a[0] === +a[0] && a[1] === +a[1] && a[2] === +a[2] && Math.abs(a[0]) < 1e4 && Math.abs(a[1]) < 1e4 && Math.abs(a[2]) < 1e4;
@@ -27,6 +28,7 @@ function bodyCapsule(q) {
 const KILL_LIMIT = 15;
 const RESPAWN_TIME = 4;
 const MAX_ITEMS = 220;
+const TEAM_SWITCH_COOLDOWN = 5; // s entre cambios de escuadra
 
 function yawQuat(yaw) {
   return [0, round(Math.sin(yaw / 2)), 0, round(Math.cos(yaw / 2))];
@@ -51,9 +53,14 @@ export class Sim {
    * @param {object} o.map      uno de MAPS
    * @param {'pvp'|'training'} o.mode
    * @param {(msg:object, to?:string|string[])=>void} o.emit  entrega mensajes (a todos o a un jugador)
+   * @param {number} o.teams        0 = todos contra todos; 2–4 = escuadras (sin fuego amigo; cuentan las bajas del equipo)
+   * @param {number} o.maxPerTeam   tamaño máximo de cada escuadra (para cambiar de equipo)
    */
-  constructor({ map, mode = 'pvp', emit = () => {}, killLimit = KILL_LIMIT }) {
+  constructor({ map, mode = 'pvp', emit = () => {}, killLimit = KILL_LIMIT, teams = 0, maxPerTeam = Infinity }) {
     this.killLimit = killLimit; // bajas para ganar la partida (cada sala elige el suyo)
+    this.teams = teams;
+    this.maxPerTeam = maxPerTeam;
+    this.teamKills = Array(teams).fill(0);
     this.map = map;
     this.mode = mode;
     this.emit = emit;
@@ -134,7 +141,7 @@ export class Sim {
   // ---------------------------------------------------------------- jugadores
   addPlayer(id, { name = 'Jugador', loadout } = {}) {
     const p = {
-      id, name: String(name).slice(0, 16) || 'Jugador', alive: false, hp: PLAYER_HP, kills: 0, deaths: 0,
+      id, name: String(name).slice(0, 16) || 'Jugador', team: this.teams ? this.smallestTeam() : null, teamAt: -Infinity, alive: false, hp: PLAYER_HP, kills: 0, deaths: 0,
       loadout: sanitizeLoadout(loadout ?? (this.mode === 'training' ? { ranged: 'bow' } : { melee: 'sword', ranged: 'bow' })),
       inv: makeInventory({}, { infinite: this.infinite }), cdUntil: {}, respawnAt: 0, lastPoseAt: 0,
       head: new THREE.Vector3(0, 1.65, 0),
@@ -143,10 +150,11 @@ export class Sim {
     this.players.set(id, p);
     this.emit({
       t: 'welcome', id, mode: this.mode, map: this.map.id, killLimit: this.killLimit, infinite: this.infinite,
-      players: [...this.players.values()].map((q) => ({ id: q.id, name: q.name, k: q.kills, d: q.deaths })),
+      teams: this.teams, teamKills: this.teamKills,
+      players: [...this.players.values()].map((q) => ({ id: q.id, name: q.name, k: q.kills, d: q.deaths, team: q.team })),
       items: [...this.items.values()].map((i) => this.publicItem(i)),
     }, id);
-    this.emit({ t: 'join', id, name: p.name });
+    this.emit({ t: 'join', id, name: p.name, team: p.team });
     this.spawn(p);
     return p;
   }
@@ -167,7 +175,7 @@ export class Sim {
     for (const s of spawns) {
       let d = Infinity;
       for (const o of this.players.values()) {
-        if (o !== p && o.alive) d = Math.min(d, Math.hypot(o.head.x - s.x, o.head.z - s.z));
+        if (o !== p && o.alive && !this.allies(o, p)) d = Math.min(d, Math.hypot(o.head.x - s.x, o.head.z - s.z));
       }
       if (d === Infinity) d = Math.random() * 10; // sin rivales: al azar
       if (d > bestD) {
@@ -194,8 +202,41 @@ export class Sim {
   sendScores() {
     this.emit({
       t: 'scores',
-      list: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, k: p.kills, d: p.deaths })),
+      list: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, k: p.kills, d: p.deaths, team: p.team })),
+      tk: this.teamKills,
     });
+  }
+
+  // ---------------------------------------------------------------- escuadras
+  /** Compañeros: sala por escuadras y mismo equipo (no hay fuego amigo). */
+  allies(a, b) {
+    return this.teams > 0 && a.team === b.team;
+  }
+
+  teamSize(team) {
+    let n = 0;
+    for (const q of this.players.values()) if (q.team === team) n++;
+    return n;
+  }
+
+  smallestTeam() {
+    let best = 0;
+    for (let i = 1; i < this.teams; i++) if (this.teamSize(i) < this.teamSize(best)) best = i;
+    return best;
+  }
+
+  /** Cambio de escuadra a petición del jugador: limitado por el tamaño de la escuadra y un tiempo de espera. */
+  setTeam(p, team) {
+    if (!this.teams || !Number.isInteger(team) || team < 0 || team >= this.teams || team === p.team) return undefined;
+    if (this.time - p.teamAt < TEAM_SWITCH_COOLDOWN) return this.notify(p, 'Espera unos segundos para volver a cambiar de escuadra');
+    if (this.teamSize(team) >= this.maxPerTeam) return this.notify(p, `La escuadra ${teamName(team)} está completa`);
+    p.team = team;
+    p.teamAt = this.time;
+    if (p.alive) this.dropAll(p);
+    this.emit({ t: 'team', id: p.id, team });
+    this.sendScores();
+    if (p.alive && !this.winner) this.spawn(p);
+    return undefined;
   }
 
   notify(p, text) {
@@ -232,6 +273,7 @@ export class Sim {
       case 'wind':
         if (this.mode === 'training' && finite3(m.v)) this.wind.set(m.v[0], 0, m.v[2]);
         return undefined;
+      case 'team': return this.setTeam(p, m.team);
       case 'name':
         p.name = String(m.name ?? '').slice(0, 16) || p.name;
         return this.sendScores();
@@ -327,7 +369,7 @@ export class Sim {
       if (t != null && (!best || t < best.t)) best = { t, target, head };
     };
     for (const q of this.players.values()) {
-      if (q === p || !q.alive || this.mode !== 'pvp') continue;
+      if (q === p || !q.alive || this.mode !== 'pvp' || this.allies(p, q)) continue;
       consider(segSphere(o, end, q.head, HEAD_R + 0.12), q, true);
       const [ba, bb] = bodyCapsule(q);
       consider(segCapsule(o, end, ba, bb, BODY_R + 0.12), q, false);
@@ -453,8 +495,9 @@ export class Sim {
       consider(segCapsule(p0, p1, new THREE.Vector3(dm.pos.x, 0.2, dm.pos.z), new THREE.Vector3(dm.pos.x, 1.4, dm.pos.z), BODY_R), { kind: 'dummy', victim: dm, head: false });
     }
     if (this.mode === 'pvp') {
+      const shooter = this.players.get(pr.owner);
       for (const q of this.players.values()) {
-        if (!q.alive || q.id === pr.owner) continue;
+        if (!q.alive || q.id === pr.owner || shooter && this.allies(shooter, q)) continue;
         consider(segSphere(p0, p1, q.head, HEAD_R), { kind: 'player', victim: q, head: true });
         const [ba, bb] = bodyCapsule(q);
         consider(segCapsule(p0, p1, ba, bb, BODY_R), { kind: 'player', victim: q, head: false });
@@ -553,11 +596,21 @@ export class Sim {
     victim.alive = false;
     victim.deaths++;
     victim.respawnAt = this.time + RESPAWN_TIME;
-    if (attacker !== victim) attacker.kills++;
+    if (attacker !== victim) {
+      attacker.kills++;
+      if (this.teams) this.teamKills[attacker.team]++;
+    }
     this.dropAll(victim);
     this.emit({ t: 'kill', k: attacker.id, kn: attacker.name, v: victim.id, vn: victim.name, w: weaponLabel });
     this.sendScores();
-    if (attacker.kills >= this.killLimit && !this.winner) {
+    if (this.winner) return;
+    if (this.teams) {
+      if (this.teamKills[attacker.team] >= this.killLimit) {
+        this.winner = `team${attacker.team}`;
+        this.matchResetAt = this.time + 8;
+        this.emit({ t: 'match_end', winner: this.winner, team: attacker.team, name: `Escuadra ${teamName(attacker.team)}` });
+      }
+    } else if (attacker.kills >= this.killLimit) {
       this.winner = attacker.id;
       this.matchResetAt = this.time + 8;
       this.emit({ t: 'match_end', winner: attacker.id, name: attacker.name });
@@ -610,6 +663,7 @@ export class Sim {
 
   resetMatch() {
     this.winner = null;
+    this.teamKills.fill(0);
     this.resetItems();
     for (const p of this.players.values()) {
       p.kills = 0;

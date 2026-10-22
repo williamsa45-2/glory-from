@@ -64,7 +64,8 @@ function handler(req, res) {
     return;
   }
   if (url.pathname === '/api/rooms') {
-    res.writeHead(200, { ...baseHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    // CORS abierto: la lista de salas es pública y así el menú puede consultar un servidor de otro dominio
+    res.writeHead(200, { ...baseHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({ rooms: game.listRooms() }));
     return;
   }
