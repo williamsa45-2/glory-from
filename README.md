@@ -78,6 +78,13 @@ WebXR exige **contexto seguro** (HTTPS o `localhost`):
 
 Necesitas un dominio apuntando al VPS y HTTPS (para WebXR y para `wss://`). El servidor sirve la web y el WebSocket (`/ws`) en el mismo puerto, así que el cliente se conecta solo al mismo dominio.
 
+**Despliegue automático (recomendado):** cada push a `main` pasa las pruebas y actualiza el VPS (`.github/workflows/deploy.yml`).
+1. Apunta un dominio (registro A) a la IP del VPS.
+2. En el VPS (Ubuntu/Debian), como root: `DOMAIN=juego.midominio.com DEPLOY_USER=deploy bash deploy/setup-vps.sh` (instala Docker, crea el usuario y abre 22/80/443).
+3. En tu PC: `ssh-keygen -t ed25519 -f deploy_key -N ""`; pega `deploy_key.pub` en `/home/deploy/.ssh/authorized_keys` del VPS y **borra** la clave del PC después de usarla.
+4. En GitHub > Settings > Secrets and variables > Actions: `VPS_HOST` (IP), `VPS_USER` (`deploy`), `VPS_SSH_KEY` (contenido de `deploy_key`) y, si no es el 22, `VPS_PORT`.
+5. `git push` a `main` (o *Actions > Deploy > Run workflow*). El workflow sube el código por rsync y ejecuta `deploy/deploy.sh` (docker compose + comprobación de `/healthz`). Caddy saca el certificado HTTPS solo.
+
 **Opción A: Docker + Caddy (la más simple, HTTPS automático)**
 ```bash
 git clone <tu repo> archery && cd archery
@@ -93,7 +100,7 @@ sudo cp deploy/archery.service /etc/systemd/system/ && sudo systemctl enable --n
 ```
 
 ### Salas y modos de juego
-El VPS es el servidor: la web y el WebSocket salen del mismo dominio, y los jugadores no necesitan configurar nada (el campo «Servidor» del menú solo sirve para apuntar a otro).
+El VPS es el servidor: la web y el WebSocket salen del mismo dominio, y los jugadores no necesitan configurar nada (no hay que elegir servidor: el juego usa siempre el que sirve la página).
 - **Pública**: aparece en la lista de «Salas abiertas». **Privada**: solo se entra con el código o el enlace de invitación. Siempre existe una sala pública permanente (`PUBLICA`).
 - **Todos contra todos**: gana quien llegue primero a las bajas elegidas.
 - **Por escuadras** (2–4: Rojo, Azul, Verde, Amarillo): sin fuego amigo; gana la escuadra cuyas bajas sumadas lleguen a la meta. Los jugadores entran equilibrados y pueden cambiar de escuadra desde la pausa (Esc), con un tiempo de espera y respetando el tamaño máximo de cada una.

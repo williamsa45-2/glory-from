@@ -21,13 +21,14 @@ import { pushOutOfBoxes, supportHeight } from '../shared/geometry.js';
 const $ = (id) => document.getElementById(id);
 
 // --- Ajustes guardados ---------------------------------------------------------------------
-const defaults = { name: '', server: '', melee: 'sword', spear: false, ranged: 'bow', hand: 'right', roomName: '', roomKills: '15', roomMax: '8', roomVisibility: 'public', roomMode: 'ffa', roomSquads: '2' };
+const defaults = { name: '', melee: 'sword', spear: false, ranged: 'bow', hand: 'right', roomName: '', roomKills: '15', roomMax: '8', roomVisibility: 'public', roomMode: 'ffa', roomSquads: '2' };
 const settings = { ...defaults };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('archery-settings') ?? '{}'));
 } catch {
   /* sin almacenamiento */
 }
+delete settings.server; // ajuste antiguo: ya no se elige servidor
 const saveSettings = () => {
   try {
     localStorage.setItem('archery-settings', JSON.stringify(settings));
@@ -340,12 +341,6 @@ $('name').addEventListener('input', () => {
   settings.name = $('name').value.slice(0, 16);
   saveSettings();
 });
-$('server').placeholder = defaultServer();
-$('server').value = settings.server;
-$('server').addEventListener('input', () => {
-  settings.server = $('server').value.trim();
-  saveSettings();
-});
 
 const menuButtons = () => [$('btn-training'), $('btn-pvp'), $('btn-create'), $('btn-join')];
 
@@ -578,7 +573,7 @@ window.addEventListener('resize', () => {
 // ?sala=CODE (enlace de invitación) abre el panel PvP con el código puesto.
 // ?autostart=training|pvp  (&server=ws://…) arranca directamente; útil para pruebas
 const params = new URLSearchParams(location.search);
-if (params.get('server')) settings.server = params.get('server');
+if (params.get('server')) settings.server = params.get('server'); // solo pruebas: el juego usa siempre el servidor que sirve la página
 if (params.get('name')) settings.name = params.get('name');
 if (params.get('sala')) {
   $('pvp-panel').hidden = false;
