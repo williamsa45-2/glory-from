@@ -8,7 +8,7 @@ services:
     environment:
       MAX_PLAYERS: ${MAX_PLAYERS:-12}
       MAX_PER_IP: ${MAX_PER_IP:-4}
-      # Sin proxy delante no se confía en X-Forwarded-For (se podría falsear la IP); el override HTTPS lo activa.
-      TRUST_PROXY: "0"
+      # 1 si hay un proxy delante (Nginx Proxy Manager, nginx…) para ver la IP real de cada jugador; con 0 no se confía en X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
     ports:
       - "${PUERTO_WEB:-8080}:3000"

@@ -55,6 +55,7 @@
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
     #pvp-panel { margin-top: 16px; padding: 16px; border-radius: 12px; background: #10231a; border: 1px solid #3d5b43; }
     #pvp-panel h2:first-child { margin-top: 0; }
+    #hands-panel { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: #10231a; border: 1px solid #5d8a63; font-size: 15px; }
     .row { display: flex; gap: 8px; align-items: center; }
     .row input[type=text] { flex: 1; }
     #room-code { text-transform: uppercase; letter-spacing: .25em; font-weight: 700; }
@@ -86,6 +87,15 @@
       <div class="modes">
         <button id="btn-training" class="mode">Entrenamiento<small>Campo de tiro, munición infinita, muñecos y armero con todas las armas</small></button>
         <button id="btn-pvp" class="mode">PvP online<small>Crea una sala e invita a tus amigos, o únete con un código</small></button>
+      </div>
+      <!-- CONTROL CON LAS MANOS (cámara) para el entrenamiento, y lateralidad (también para VR) -->
+      <div id="hands-panel">
+        <label class="check"><input type="checkbox" id="hands-cam"> <b>Tirar con las manos (cámara)</b> — solo en Entrenamiento</label>
+        <div class="grid" style="grid-template-columns: 150px 1fr; margin-top:8px">
+          <label for="hand">Mano dominante</label>
+          <select id="hand"><option value="right">Diestro: tenso la cuerda con la derecha</option><option value="left">Zurdo: tenso la cuerda con la izquierda</option></select>
+        </div>
+        <p class="note" style="margin-bottom:0">Con la mano dominante pellizca (pulgar + índice) para tensar y abre para disparar; la otra mano (la del arco) maneja la vista: apártala del sitio donde la enseñaste para girar, y mientras tensas muévela para afinar la puntería. No hace falta ratón. Necesita cámara y abrir el juego por <b>localhost</b> o <b>HTTPS</b>. También puedes activarla desde la pausa.</p>
       </div>
       <div id="menu-status" class="note"></div>
       <div id="menu-error" class="err"></div>
@@ -134,8 +144,6 @@
         <select id="lo-ranged"><option value="bow">Arco (12 flechas)</option><option value="crossbow">Ballesta (6 virotes, más alcance)</option><option value="sling">Honda (1 piedra + las del suelo)</option><option value="none">Ninguna</option></select>
         <label for="name">Nombre</label>
         <input type="text" id="name" maxlength="16" placeholder="Tu nombre">
-        <label for="hand">Mano dominante (VR)</label>
-        <select id="hand"><option value="right">Derecha</option><option value="left">Izquierda</option></select>
       </div>
       <div class="rule">No se puede llevar espada y hacha a la vez, ni arco, ballesta y honda a la vez. Lo lanzado no desaparece del mundo: se vuelve a recoger.</div>
 
@@ -207,6 +215,12 @@
       <div id="train-tips" hidden>
         <h2>Entrenamiento</h2>
         <p class="rule" style="font-size:14px">El armero está a la derecha de la plataforma: acércate y pulsa <b>E</b> (VR: agarre) para coger un arma. Cada hueco admite un arma (espada/hacha, lanza, arco/ballesta/honda); coger otra reemplaza la anterior. Lo lanzado se queda en el suelo: <b>E</b> para recogerlo o <b>R</b> para recogerlo todo. Prueba el cuerpo a cuerpo con los muñecos de paja.</p>
+        <div class="row" style="flex-wrap:wrap">
+          <button id="btn-hands" class="btn alt small">Activar control con las manos</button>
+          <select id="p-hand" style="width:auto"><option value="right">Diestro</option><option value="left">Zurdo</option></select>
+          <select id="p-cam" style="width:auto;max-width:260px" title="Cámara que se usa" hidden></select>
+        </div>
+        <p class="note" id="hands-status" style="margin-top:6px"></p>
       </div>
       <div class="actions">
         <button id="play" class="btn">Continuar</button>

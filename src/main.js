@@ -11,6 +11,7 @@ import { Scoreboard, RING_STYLE, ARROWS_PER_END } from './scoreboard.js';
 import { DesktopHud } from './hud.js';
 import { DesktopControls } from './desktop.js';
 import { VRControls } from './vr.js';
+import { HandControl, listCameras } from './handControl.js';
 import { Sim } from '../shared/sim.js';
 import { DECK, ARENA_MAP, TRAINING_MAP, TARGET_CENTER_Y } from '../shared/maps.js';
 import { teamName, teamColor } from '../shared/teams.js';
@@ -21,7 +22,7 @@ import { pushOutOfBoxes, supportHeight } from '../shared/geometry.js';
 const $ = (id) => document.getElementById(id);
 
 // --- Ajustes guardados ---------------------------------------------------------------------
-const defaults = { name: '', melee: 'sword', spear: false, ranged: 'bow', hand: 'right', roomName: '', roomKills: '15', roomMax: '8', roomVisibility: 'public', roomMode: 'ffa', roomSquads: '2' };
+const defaults = { name: '', melee: 'sword', spear: false, ranged: 'bow', hand: 'right', roomName: '', roomKills: '15', roomMax: '8', roomVisibility: 'public', roomMode: 'ffa', roomSquads: '2', handsCam: false, camera: '' };
 const settings = { ...defaults };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem('archery-settings') ?? '{}'));
@@ -209,11 +210,63 @@ async function launch(selectedMode, { serverUrl, room, create } = {}) {
     };
   }
   await transport.start();
+  if (mode === 'training' && settings.handsCam) startHandControl();
   if (transport.room) await showRoom({ ...transport.room, createdHere: !!create });
   launched = true;
   $('vr-slot').hidden = false;
   clock.start();
   renderer.setAnimationLoop(frame);
+}
+
+/** Cámara + reconocimiento de manos (solo entrenamiento). No bloquea el arranque: el aviso sale al terminar. */
+let handsStarting = false;
+function startHandControl() {
+  if (game.hands || handsStarting) return;
+  handsStarting = true;
+  const hands = new HandControl({ hand: settings.hand, deviceId: settings.camera });
+  hud.toast('Activando la cámara…', 4);
+  renderHandsStatus('Activando la cámara…');
+  hands.start().then(
+    () => {
+      game.hands = hands;
+      const side = settings.hand === 'left' ? 'izquierda' : 'derecha';
+      hud.toast(`Manos activadas: pellizca con la ${side} para tensar y abre para disparar`, 6);
+    },
+    (err) => {
+      // el recuadro de la cámara ya muestra el error en rojo; también queda escrito en la pausa
+      hands.stop();
+      hud.toast(err.message || 'No se pudo activar la cámara', 6);
+      renderHandsStatus(`⚠ ${err.message || 'No se pudo activar la cámara'}`);
+    }
+  ).finally(() => {
+    handsStarting = false;
+    if (game.hands) renderHandsStatus();
+    renderCameraPicker(hands.stream?.getVideoTracks()[0]?.getSettings().deviceId);
+  });
+}
+
+/** Selector de cámara de la pausa: solo aparece si hay más de una (los nombres se conocen tras dar permiso). */
+async function renderCameraPicker(activeId) {
+  const cams = await listCameras();
+  const pick = $('p-cam');
+  pick.hidden = cams.length < 2;
+  pick.replaceChildren(...cams.map((c) => new Option(c.label, c.deviceId)));
+  pick.value = activeId || settings.camera || cams[0]?.deviceId || '';
+}
+
+function stopHandControl() {
+  game.hands?.stop();
+  game.hands = null;
+  renderHandsStatus();
+}
+
+/** Botón y texto de la pausa del entrenamiento. */
+function renderHandsStatus(text) {
+  $('btn-hands').textContent = game.hands ? 'Desactivar control con las manos' : 'Activar control con las manos';
+  $('btn-hands').disabled = handsStarting;
+  $('hands-status').textContent = text ?? (game.hands
+    ? 'Cámara activa. Pulsa «Continuar», selecciona el arco (3 o Q) y pellizca para tensar.'
+    : 'Usa la cámara para tensar y disparar con la mano, como un arquero.');
 }
 
 function onScore(m) {
@@ -241,7 +294,10 @@ function frame() {
     sim.wind.set(wind.vec.x, 0, wind.vec.z);
   }
   if (presenting) vr.update(dt);
-  else desktop.update(dt);
+  else {
+    game.hands?.update(dt);
+    desktop.update(dt);
+  }
   session.update(dt);
   game.bow.update(dt);
   world.update(t, dt, wind, camera);
@@ -283,6 +339,7 @@ function showPause(text) {
   $('pvp-loadout').hidden = mode !== 'pvp';
   $('room-info').hidden = !(mode === 'pvp' && currentRoom);
   $('train-tips').hidden = mode !== 'training';
+  if (mode === 'training') renderHandsStatus();
   renderTeamPicker();
 }
 
@@ -335,7 +392,29 @@ function syncSelects(from) {
   $(`${to}-spear`).checked = !!settings.spear;
   $(`${to}-ranged`).value = settings.ranged;
 }
-bindSelect('hand', 'hand');
+// mano dominante (diestro/zurdo): la usa la VR y el control con manos; el menú y la pausa van sincronizados
+const applyHand = () => {
+  $('hand').value = $('p-hand').value = settings.hand;
+  if (game.hands) game.hands.hand = settings.hand;
+};
+bindSelect('hand', 'hand', { onChange: applyHand });
+bindSelect('p-hand', 'hand', { onChange: applyHand });
+bindSelect('hands-cam', 'handsCam', { checkbox: true });
+$('p-cam').addEventListener('change', () => {
+  settings.camera = $('p-cam').value;
+  saveSettings();
+  if (game.hands) {
+    stopHandControl();
+    startHandControl();
+  }
+});
+$('btn-hands').addEventListener('click', () => {
+  if (game.hands) stopHandControl();
+  else startHandControl();
+  settings.handsCam = !!game.hands || handsStarting;
+  $('hands-cam').checked = settings.handsCam;
+  saveSettings();
+});
 $('name').value = settings.name;
 $('name').addEventListener('input', () => {
   settings.name = $('name').value.slice(0, 16);

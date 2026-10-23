@@ -37,8 +37,10 @@ const types = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.glb': 'model/gltf-binary',
+  '.wasm': 'application/wasm',
+  '.task': 'application/octet-stream',
 };
-const compressible = new Set(['.html', '.js', '.mjs', '.json', '.css', '.svg', '.glb']);
+const compressible = new Set(['.html', '.js', '.mjs', '.json', '.css', '.svg', '.glb', '.wasm']);
 const gzipCache = new Map(); // ruta -> { etag, buffer }
 
 const baseHeaders = {

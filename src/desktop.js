@@ -170,6 +170,14 @@ export class DesktopControls {
     stepVertical(this.body, dt, (feet) => collision.support(rig.position, feet), session.alive && this.keys.has('Space'));
     rig.position.y = this.body.y;
 
+    // control con manos: mientras se tensa, la mano del arco afina la puntería (se suma al ratón)
+    const aim = this.game.hands?.takeAim();
+    if (aim && this.locked) {
+      const k = camera.fov / 72;
+      this.yaw += aim.yaw * k;
+      this.pitch = THREE.MathUtils.clamp(this.pitch + aim.pitch * k, -1.5, 1.5);
+    }
+
     rig.rotation.y = this.yaw;
     camera.rotation.set(this.pitch, 0, 0);
     camera.position.set(0, EYE_HEIGHT, 0);
@@ -180,7 +188,9 @@ export class DesktopControls {
       camera.updateProjectionMatrix();
     }
 
-    this.weapons.update(dt, { primary: session.alive && this.primary, zoom: this.zoom });
+    // el pellizco de la cámara (control con manos) hace de clic izquierdo mantenido
+    const pinch = this.locked && !!this.game.hands?.pinch;
+    this.weapons.update(dt, { primary: session.alive && (this.primary || pinch), zoom: this.zoom });
     this.updateHint();
 
     this.poseTimer -= dt;
