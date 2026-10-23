@@ -11,4 +11,4 @@ services:
       # Sin proxy delante no se confía en X-Forwarded-For (se podría falsear la IP); el override HTTPS lo activa.
       TRUST_PROXY: "0"
     ports:
-      - "${PUERTO_WEB:-80}:3000"
+      - "${PUERTO_WEB:-8080}:3000"
