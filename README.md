@@ -78,19 +78,18 @@ WebXR exige **contexto seguro** (HTTPS o `localhost`):
 
 Necesitas un dominio apuntando al VPS y HTTPS (para WebXR y para `wss://`). El servidor sirve la web y el WebSocket (`/ws`) en el mismo puerto, así que el cliente se conecta solo al mismo dominio.
 
-**Despliegue automático (recomendado):** cada push a `main` pasa las pruebas y actualiza el VPS (`.github/workflows/deploy.yml`).
-1. Apunta un dominio (registro A) a la IP del VPS.
-2. En el VPS (Ubuntu/Debian), como root: `DOMAIN=juego.midominio.com DEPLOY_USER=deploy bash deploy/setup-vps.sh` (instala Docker, crea el usuario y abre 22/80/443).
-3. En tu PC: `ssh-keygen -t ed25519 -f deploy_key -N ""`; pega `deploy_key.pub` en `/home/deploy/.ssh/authorized_keys` del VPS y **borra** la clave del PC después de usarla.
-4. En GitHub > Settings > Secrets and variables > Actions: `VPS_HOST` (IP), `VPS_USER` (`deploy`), `VPS_SSH_KEY` (contenido de `deploy_key`) y, si no es el 22, `VPS_PORT`.
-5. `git push` a `main` (o *Actions > Deploy > Run workflow*). El workflow sube el código por rsync y ejecuta `deploy/deploy.sh` (docker compose + comprobación de `/healthz`). Caddy saca el certificado HTTPS solo.
-
-**Opción A: Docker + Caddy (la más simple, HTTPS automático)**
+**Opción A: Docker + Caddy (recomendada, HTTPS automático)** — misma estructura que Klassy
 ```bash
-git clone <tu repo> archery && cd archery
-DOMAIN=juego.midominio.com docker compose -f deploy/docker-compose.yml up -d --build
+git clone <tu repo> ~/repositories/glory-from && cd ~/repositories/glory-from
+cp .env.produccion.example .env     # pon DOMINIO=juego.midominio.com (vacío = HTTP por IP)
+./deploy/levantar.sh
 ```
-Abre los puertos 80 y 443. Caddy obtiene y renueva el certificado solo.
+Con `DOMINIO` usa `docker-compose.yml` + `docker-compose.https.yml` (Caddy, puertos 80/443, certificado solo); sin él, publica el juego en `PUERTO_WEB`. El dominio debe tener un registro A hacia el VPS. Para actualizar a mano: `./deploy/actualizar.sh` (git pull + reconstruir).
+
+**Actualización automática:** cada push a `main` pasa las pruebas y ejecuta `./deploy/actualizar.sh` en el VPS por SSH (`.github/workflows/deploy.yml`). Hace falta:
+1. Una clave SSH de despliegue: `ssh-keygen -t ed25519 -f deploy_key -N ""`; la pública (`deploy_key.pub`) en `~/.ssh/authorized_keys` del VPS y después **borra** `deploy_key` del PC.
+2. Secretos en GitHub (Settings > Secrets and variables > Actions): `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` (contenido de `deploy_key`) y, si no es el 22, `VPS_PORT`.
+3. Que el usuario del VPS use Docker (`sudo usermod -aG docker <usuario>`) y pueda hacer `git pull` del repositorio (público, o con deploy key de solo lectura).
 
 **Opción B: systemd + nginx** (ver `deploy/archery.service` y `deploy/nginx.conf`)
 ```bash

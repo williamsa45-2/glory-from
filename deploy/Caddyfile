@@ -1,5 +1,5 @@
-# Caddy obtiene y renueva el certificado solo. Proxifica HTTP y el WebSocket (/ws) al juego.
-{$DOMAIN} {
+{$DOMINIO} {
 	encode zstd gzip
+	# Proxifica HTTP y el WebSocket (/ws) al juego.
 	reverse_proxy game:3000
 }

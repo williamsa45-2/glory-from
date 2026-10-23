@@ -1,0 +1,33 @@
+# HTTPS con dominio propio: Caddy obtiene y renueva el certificado solo (Let's Encrypt).
+# Se usa SOBRE el compose base (lo hace ./deploy/levantar.sh si hay DOMINIO en .env):
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+# Requiere el registro DNS A apuntando a la IP del VPS y los puertos 80/443 abiertos.
+# Necesita Docker Compose >= 2.24 (por `!override`).
+
+services:
+  game:
+    # Ya no se publica a internet: solo Caddy lo alcanza (y localmente, para depurar).
+    ports: !override
+      - "127.0.0.1:${PUERTO_WEB:-8080}:3000"
+    environment:
+      TRUST_PROXY: "1"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMINIO: ${DOMINIO:?Define DOMINIO en .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data
+      - caddy_config:/config
+    depends_on:
+      - game
+
+volumes:
+  caddy_datos:
+  caddy_config:

@@ -1,0 +1,14 @@
+# Campo de Tiro en contenedor (VPS, o local para probar igual que en el servidor).
+# Uso: cp .env.produccion.example .env  ->  editar  ->  ./deploy/levantar.sh
+
+services:
+  game:
+    build: .
+    restart: unless-stopped
+    environment:
+      MAX_PLAYERS: ${MAX_PLAYERS:-12}
+      MAX_PER_IP: ${MAX_PER_IP:-4}
+      # Sin proxy delante no se confía en X-Forwarded-For (se podría falsear la IP); el override HTTPS lo activa.
+      TRUST_PROXY: "0"
+    ports:
+      - "${PUERTO_WEB:-80}:3000"
