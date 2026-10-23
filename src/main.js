@@ -531,23 +531,8 @@ game.onLockChange = (locked) => {
 };
 document.addEventListener('pointerlockerror', () => launched && showPause());
 
-// WebXR: botón de entrada a VR + diagnóstico de compatibilidad
+// WebXR: botón de entrada a VR
 $('vr-slot').appendChild(VRButton.createButton(renderer));
-const vrNote = $('vr-note');
-if (!window.isSecureContext) {
-  vrNote.textContent = 'Para VR abre esta página con https:// o http://localhost (WebXR lo exige). Mira el README.';
-} else if (!navigator.xr) {
-  vrNote.textContent = 'Este navegador no ofrece WebXR. Usa el del visor (Meta Quest Browser, Pico, Wolvic, Safari de Vision Pro…) o Chrome/Edge en PC con el visor conectado.';
-} else {
-  navigator.xr
-    .isSessionSupported('immersive-vr')
-    .then((ok) => {
-      vrNote.textContent = ok
-        ? 'Visor VR detectado: elige un modo y pulsa ENTER VR. Funciona con mandos, con un solo mando o con las manos.'
-        : 'No se detecta ningún visor VR. Conéctalo (SteamVR / Oculus Link / WMR) o abre esta página desde su navegador.';
-    })
-    .catch(() => {});
-}
 
 renderer.xr.addEventListener('sessionstart', () => {
   audio.resume();
